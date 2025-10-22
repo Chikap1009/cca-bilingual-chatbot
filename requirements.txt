@@ -1,11 +1,15 @@
-streamlit
+# ---------- Web framework ----------
 fastapi
 uvicorn
+
+# ---------- HTTP / utilities ----------
 requests
 langdetect
+tqdm
+numpy
+
+# ---------- RAG & embeddings ----------
 sentence-transformers
 faiss-cpu
 rank-bm25
-tqdm
 PyMuPDF
-python-dotenv
