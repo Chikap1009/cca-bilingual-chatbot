@@ -1,0 +1,11 @@
+streamlit
+fastapi
+uvicorn
+requests
+langdetect
+sentence-transformers
+faiss-cpu
+rank-bm25
+tqdm
+PyMuPDF
+python-dotenv
