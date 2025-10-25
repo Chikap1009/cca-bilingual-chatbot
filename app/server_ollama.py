@@ -1,12 +1,19 @@
-import os, json, requests, re
+import os, json, requests, re, gc
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from langdetect import detect
-from .retrieve import HybridRetriever
 
 # -------------------------------------------------------------
-# Load system prompts (English + Hindi)
+# Ollama + FastAPI Config
+# -------------------------------------------------------------
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
+MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
+
+app = FastAPI(title="CCA Bilingual Chatbot API", version="2.2")
+
+# -------------------------------------------------------------
+# Load lightweight resources only
 # -------------------------------------------------------------
 with open("prompts/system_en.txt", "r", encoding="utf-8") as f:
     SYSTEM_EN = f.read().strip()
@@ -14,28 +21,28 @@ with open("prompts/system_hi.txt", "r", encoding="utf-8") as f:
     SYSTEM_HI = f.read().strip()
 
 # -------------------------------------------------------------
-# Ollama configuration
-# -------------------------------------------------------------
-OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
-MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
-
-# -------------------------------------------------------------
-# Initialize FastAPI + Retriever
-# -------------------------------------------------------------
-app = FastAPI(title="CCA Bilingual Chatbot API", version="2.1")
-retriever = HybridRetriever()
-
-# -------------------------------------------------------------
-# Input schema
+# Input Schema
 # -------------------------------------------------------------
 class ChatIn(BaseModel):
     query: str
     lang: str | None = None  # "en", "hi", or auto-detect
 
+
 # -------------------------------------------------------------
-# Helper: format context and citations
+# Lazy Retrieval Loader
 # -------------------------------------------------------------
+def get_retriever():
+    """
+    Dynamically import and initialize the retriever only when needed.
+    This prevents large FAISS + transformer models from loading at startup.
+    """
+    from .retrieve import HybridRetriever
+    retriever = HybridRetriever()
+    return retriever
+
+
 def build_context(docs):
+    """Format retrieved documents with citations."""
     blocks, cites = [], []
     for d in docs:
         org = d["meta"].get("org", "Unknown")
@@ -47,14 +54,16 @@ def build_context(docs):
 
 
 # -------------------------------------------------------------
-# Streaming Chat Endpoint
+# Chat Endpoint (Streaming)
 # -------------------------------------------------------------
 @app.post("/chat")
 def chat(inp: ChatIn):
     q = inp.query.strip()
-    lang = inp.lang
+    if not q:
+        return StreamingResponse(iter(["Please ask a question."]), media_type="text/plain")
 
-    # Language auto-detection
+    # Auto-detect language
+    lang = inp.lang
     if not lang:
         try:
             lang = "hi" if detect(q) == "hi" else "en"
@@ -63,8 +72,15 @@ def chat(inp: ChatIn):
 
     system_prompt = SYSTEM_HI if lang == "hi" else SYSTEM_EN
 
+    # Lazy load retriever here (saves memory on startup)
+    retriever = get_retriever()
+
     # Retrieve top relevant docs
-    docs = retriever.retrieve(q)
+    try:
+        docs = retriever.retrieve(q)
+    except Exception as e:
+        docs = [{"text": f"[Retriever failed: {e}]", "meta": {"org": "N/A", "year": "N/A", "title": ""}}]
+
     context, cites = build_context(docs)
 
     # Build final prompt
@@ -94,7 +110,6 @@ def chat(inp: ChatIn):
     print("==============================================================\n")
 
     def stream_response():
-        """Stream tokens safely from Ollama and send a final clean JSON summary."""
         collected_text = ""
         try:
             with requests.post(OLLAMA_URL, json=payload, stream=True, timeout=None) as resp:
@@ -108,14 +123,13 @@ def chat(inp: ChatIn):
                                 collected_text += chunk
                                 yield chunk
                         except json.JSONDecodeError:
-                            continue  # Skip malformed lines
-
+                            continue
         except requests.exceptions.RequestException as e:
             yield f"\n[❌ Ollama request failed: {e}]"
         except Exception as e:
             yield f"\n[⚠️ Unexpected error: {e}]"
 
-        # --- Final cleanup before returning JSON ---
+        # Cleanup output
         cleaned_resp = re.sub(r"\[\[END_JSON\]\].*|\{.*\}\]\]$", "", collected_text).strip()
         cleaned_resp = re.sub(r"(?s)```json.*?```", "", cleaned_resp).strip()
 
@@ -125,6 +139,10 @@ def chat(inp: ChatIn):
         }, ensure_ascii=False)
 
         yield f"\n[[END_JSON]]{final_json}[[END_JSON]]"
+
+        # Explicit memory cleanup
+        del retriever
+        gc.collect()
 
     return StreamingResponse(stream_response(), media_type="text/plain")
 
@@ -138,8 +156,9 @@ def health_check():
         "status": "ok",
         "model": MODEL,
         "ollama_url": OLLAMA_URL,
-        "retriever_status": "ready"
+        "retriever_status": "lazy-loaded"
     }
+
 
 # -------------------------------------------------------------
 # Root Endpoint
