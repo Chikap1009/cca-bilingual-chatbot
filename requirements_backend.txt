@@ -1,0 +1,11 @@
+# ---------- Backend (FastAPI + RAG) ----------
+fastapi
+uvicorn
+requests
+langdetect
+tqdm
+numpy
+sentence-transformers
+faiss-cpu
+rank-bm25
+PyMuPDF
