@@ -1,15 +1,6 @@
-# ---------- Web framework ----------
-fastapi
-uvicorn
-
-# ---------- HTTP / utilities ----------
+# ---------- Streamlit UI (Frontend Only) ----------
+streamlit==1.39.0
 requests
 langdetect
-tqdm
 numpy
-
-# ---------- RAG & embeddings ----------
-sentence-transformers
-faiss-cpu
-rank-bm25
-PyMuPDF
+tqdm
