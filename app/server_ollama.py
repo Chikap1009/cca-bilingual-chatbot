@@ -14,9 +14,14 @@ MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
 app = FastAPI(title="CCA Bilingual Chatbot API", version="2.2")
 
 # ✅ Enable CORS so frontend can access backend
+origins = [
+    "https://cca-project-frontend.onrender.com",  # your Streamlit frontend
+    "http://localhost:8501",                      # optional: local Streamlit dev
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Or restrict later: ["https://cca-frontend.onrender.com"]
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
