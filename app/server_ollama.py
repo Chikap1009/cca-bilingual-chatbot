@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from langdetect import detect
+from fastapi.middleware.cors import CORSMiddleware  # ✅ NEW
 
 # -------------------------------------------------------------
 # Ollama + FastAPI Config
@@ -11,6 +12,15 @@ OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
 MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
 
 app = FastAPI(title="CCA Bilingual Chatbot API", version="2.2")
+
+# ✅ Enable CORS so frontend can access backend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Or restrict later: ["https://cca-frontend.onrender.com"]
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # -------------------------------------------------------------
 # Load lightweight resources only
