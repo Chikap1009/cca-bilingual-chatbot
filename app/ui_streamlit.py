@@ -11,7 +11,7 @@ st.markdown("Ask in **English** or **Hindi** about greenhouse or hydroponic syst
 # -----------------------------------------------------
 # Backend URL
 # -----------------------------------------------------
-API_URL = "https://cca-bot-backend.onrender.com/chat"
+API_URL = "https://cca-project-backend.onrender.com/chat"
 
 # -----------------------------------------------------
 # Language Selection
